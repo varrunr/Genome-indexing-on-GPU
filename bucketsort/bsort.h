@@ -1,8 +1,11 @@
 #ifndef __BSORT_H__
+#define __BSORT_H__
+
 #include<iostream>
 #include<string>
 #include<vector>
 using namespace std;
+
 #define MAX_DATA_SIZE 262144
 #define THREADS_PER_BLOCK 256
 #define ALPHA_SIZE 4
@@ -18,9 +21,9 @@ using namespace std;
     int *cpu_suf_arr;
     int *cpu_final_arr;
     int **cpu_bucket_ct;
-	int *gpu_suf_arr;
+    int *gpu_suf_arr;
     int *gpu_aux_arr;
-	char *gpu_genome;
+    char *gpu_genome;
 
     int **gpu_bucket_ct;
     // functions
