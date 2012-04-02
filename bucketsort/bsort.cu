@@ -19,7 +19,6 @@ __device__ int strcmp_cuda(char *source, char *dest)
 
 __device__ int get_index(int c)
 {
-
     if(c==(int)'A')return 0;
     if(c==(int)'C')return 1;
     if(c==(int)'G')return 2;
@@ -44,8 +43,8 @@ __global__ void bucketSort( int suff_size,int d_size,int b_size,
                             char* gpu_genome, int * gpu_suf_arr, 
                             int *gpu_aux_arr, int **gpu_bucket_ct)
 {
-    
-	int tid = (blockIdx.x * blockDim.x) + threadIdx.x;    // This gives every thread a unique ID.
+    // This gives every thread a unique ID.
+    int tid = (blockIdx.x * blockDim.x) + threadIdx.x;
     int base = tid * d_size;
     int end = base + d_size;
     int buck_no = 0;
@@ -54,53 +53,57 @@ __global__ void bucketSort( int suff_size,int d_size,int b_size,
         buck_no = get_bucket_no(gpu_suf_arr + gpu_suf_arr[i],b_size);
         gpu_bucket_ct[buck_no][tid] += 1;;
     }
-    
-    //	__syncthreads(); // Barrier - all threads must finish comparing suffixes 
-    
+    //__syncthreads();
 }
 
 void myfunc(int suff_size,int b_size)
 {
-	// Read genome from disk
-	setup(suff_size,"genome");
-	// Block and grid dimensions
-	int threads_per_blk = 1;
+    // Read genome from disk
+    setup(suff_size,"genome");
+    // Block and grid dimensions
+    int threads_per_blk = 1;
     int nthreads = 32;
-	int blockGridWidth = nthreads/threads_per_blk;
+    int blockGridWidth = nthreads/threads_per_blk;
     //int blockGridWidth = suff_size/threads_per_blk + 1;
-	int blockGridHeight = 1;
-	dim3 blockGridRows(blockGridWidth, blockGridHeight);
-	dim3 threadBlockRows(threads_per_blk, 1);
-	
+    int blockGridHeight = 1;
+    dim3 blockGridRows(blockGridWidth, blockGridHeight);
+    dim3 threadBlockRows(threads_per_blk, 1);
 	// Allocating memory
     alloc_arr(suff_size, b_size, nthreads);
 	// Setting values
     init_arr(suff_size, b_size, nthreads);
     // Copying values to device
-	copy2dev(suff_size, b_size, nthreads);
-	//cudaMemcpyToSymbol("g_pivotIndex",&pivotIndex, sizeof(int), size_t(0),cudaMemcpyHostToDevice);
-	int d_per_thread = suff_size/nthreads;
+    copy2dev(suff_size, b_size, nthreads);
+    /* 
+       cudaMemcpyToSymbol(  "g_pivotIndex",&pivotIndex, 
+                            sizeof(int), size_t(0),
+                            cudaMemcpyHostToDevice);
+    */
+    int d_per_thread = suff_size/nthreads;
     create_buckets(b_size);    
-    bucketSort<<<blockGridRows, threadBlockRows>>>( suff_size, d_per_thread, b_size,gpu_genome, gpu_suf_arr, gpu_aux_arr, gpu_bucket_ct);
-	//CUT_CHECK_ERROR("Quick sort execution  execution failed\n");
-    //cudaThreadSynchronize();
-
-	// Copy the data back to the host
+    bucketSort<<<blockGridRows, threadBlockRows>>>( suff_size, 
+                                                    d_per_thread, 
+                                                    b_size,
+                                                    gpu_genome, 
+                                                    gpu_suf_arr, 
+                                                    gpu_aux_arr, 
+                                                    gpu_bucket_ct);
+	
+    // cudaThreadSynchronize();
+    // Copy the data back to the host
     cudaMemcpy(cpu_final_arr, gpu_aux_arr, 
                 sizeof(int ) * suff_size, 
                 cudaMemcpyDeviceToHost);
-     // Final results
+    // Final results
     /*
-	for(int i=0;i<(suff_size/THREADS_PER_BLOCK+1);i++)
-		printf("%d ",cpu_final_arr[i]);
-	printf("\n");
+    for(int i=0;i<(suff_size/THREADS_PER_BLOCK+1);i++)
+    	printf("%d ",cpu_final_arr[i]);
+    printf("\n");
     */
 }
 
 int main( int argc, char** argv) 
 {
-    //print_perm(bs);
-    //cout<<get_perm_no(chk,bs)<<endl;
     int b_size = 3;
     myfunc(atoi(argv[1]),b_size);	
     return 0;
@@ -108,7 +111,7 @@ int main( int argc, char** argv)
 
 void copy2dev(int suff_size, int b_size, int nthreads)
 {
-	// Copy the data to the device
+    // Copy the data to the device
     cudaMemcpy( gpu_suf_arr, cpu_suf_arr, sizeof(int) * suff_size, 
                 cudaMemcpyHostToDevice);
     
@@ -119,8 +122,8 @@ void copy2dev(int suff_size, int b_size, int nthreads)
                 cudaMemcpyHostToDevice);
     for(int i=0;i<b_size;i++)
     {
-        cudaMemcpy( gpu_bucket_ct + i, cpu_bucket_ct + i, sizeof(int) * nthreads, 
-                cudaMemcpyHostToDevice);
+        cudaMemcpy( gpu_bucket_ct + i, cpu_bucket_ct + i, 
+                    sizeof(int) * nthreads,cudaMemcpyHostToDevice);
     }
 
 }
@@ -130,7 +133,7 @@ void init_arr(int suff_size,int b_size,int nthreads)
     {
 		cpu_suf_arr[i] = (int)i;
 		//printf("%d - %s\n", cpu_suf_arr[i], cpu_genome+i);
-	}
+    }
 	for(int i=0;i<suff_size;i++)
 	{
 		cpu_final_arr[i] = 0;
@@ -145,8 +148,8 @@ void init_arr(int suff_size,int b_size,int nthreads)
 }
 void alloc_arr(int suff_size,int b_size,int nthreads)
 {
-	cpu_suf_arr = (int*) malloc( sizeof(int) * suff_size);
-	cpu_final_arr = (int*) malloc( sizeof(int) * suff_size);
+    cpu_suf_arr = (int*) malloc( sizeof(int) * suff_size);  
+    cpu_final_arr = (int*) malloc( sizeof(int) * suff_size);
     cpu_bucket_ct = (int **) malloc( sizeof(int*) * b_size);
     
     cudaMalloc( (void ***)&gpu_bucket_ct, sizeof(int*) * b_size);
