@@ -4,7 +4,7 @@
 #define uint32 unsigned int
 using namespace std;
 
-char alpha[] = {'a','c','t','g'};
+char alpha[] = {'A','C','T','G'};
 vector<string> buckets;
 
 void gen_perms(uint32 depth,string path)
