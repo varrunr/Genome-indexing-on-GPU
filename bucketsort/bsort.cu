@@ -104,6 +104,97 @@ __global__ void BsortWriteBack( int suff_size , int b_size , int s_seg,
     }
     __syncthreads();  
 }
+
+__global__ void block_scan_write_up( int *g_idata, int block_offset, int block_size, int start, int end, int n)
+{
+    int tid = (unsigned long int) (threadIdx.x + blockDim.x * threadIdx.y + \
+							( blockIdx.x * blockDim.x * blockDim.y ) \
+							+ ( blockIdx.y * blockDim.x * blockDim.y * gridDim.x)); 
+
+    if(tid >=start && tid<=end)
+    {
+	    int prev_block_offset = block_offset/block_size;
+	        
+	    int prev_block_index = (((tid+1)*prev_block_offset) - 1);
+	    
+	    int x = prev_block_index/block_offset;
+
+	    if((prev_block_index+1) % block_offset != 0 && x > 0)
+	    {
+	    	g_idata[prev_block_index] += g_idata[(x)*block_offset - 1];    	
+	    }    	
+    }
+}
+
+__global__ void block_scan( int *g_idata, int block_offset, int block_size, int start, int end, int n) 
+{ 
+    extern __shared__ int temp[]; // allocated on invocation 
+
+    int tid = (unsigned long int) (threadIdx.x + blockDim.x * threadIdx.y + \
+							( blockIdx.x * blockDim.x * blockDim.y ) \
+							+ ( blockIdx.y * blockDim.x * blockDim.y * gridDim.x)); 
+
+    int thid = threadIdx.x; 
+	int pout = 0, pin = 1; 
+	int n1 = block_size;
+	temp[thid] = 0;
+	temp[n1+thid] = 0;
+
+    // load input into shared memory.  
+    // This is exclusive scan, so shift right by one and set first elt to 0 
+	if( (((tid+1)*block_offset) - 1) >= start && (((tid+1)*block_offset) - 1) <= end)
+	{
+	    temp[pout*n1 + thid] = g_idata[((tid+1)*block_offset) - 1];  
+	    temp[pin*n1 + thid] = g_idata[((tid+1)*block_offset) - 1]; 
+	}
+	else
+	{
+	    temp[pout*n1 + thid] = 0; 
+	    temp[pin*n1 + thid] = 0; 
+	}
+
+    __syncthreads(); 
+
+    for (int offset = 1; offset < n1; offset *= 2) 
+    { 
+        pout = 1 - pout; // swap double buffer indices 
+        pin  = 1 - pin; 
+
+        if (thid >= offset) 
+            temp[pout*n1+thid] = temp[pin*n1+thid] + temp[pin*n1+thid - offset]; 
+   		else 
+  			temp[pout*n1+thid] = temp[pin*n1+thid]; 
+
+        __syncthreads(); 
+    }
+
+	if( (((tid+1)*block_offset) - 1) >= start && (((tid+1)*block_offset) - 1) <= end)
+		g_idata[((tid+1)*block_offset) - 1] = temp[pout*n1+thid];
+}
+
+void prefixCompute( int *gpu_prefix_arr, dim3 blockGridRows, dim3 threadBlockRows, 
+                    int block_size, int start, int end, int prefixesCount)
+{
+	int sharedMemory = 2*block_size*sizeof(int);
+	
+	int block_offset = 0;
+	int l = log2((float)prefixesCount)/log2((float)block_size);
+
+	for(int i=0; i<=l; i++)
+	{
+		block_offset = pow((float)block_size, i);
+		block_scan <<< blockGridRows, threadBlockRows, sharedMemory>>> (gpu_prefix_arr, block_offset, block_size, start, end, prefixesCount);
+		cudaThreadSynchronize();
+	}
+	for(int i=l; i > 0; i--)
+	{
+		block_offset = pow((float)block_size, i);	
+		block_scan_write_up <<< blockGridRows, threadBlockRows, sharedMemory>>> ( gpu_prefix_arr, block_offset, block_size, start, end, prefixesCount);
+		cudaThreadSynchronize();
+	}
+
+}
+
 void myfunc( int suff_size )
 {
     // Read genome from disk
@@ -114,7 +205,7 @@ void myfunc( int suff_size )
     //int blockGridWidth = suff_size/threads_per_blk + 1;
     dim3 blkGridRows(blkGridWidth, blkGridHeight);
     dim3 thdBlkRows(thd_per_blk, 1);
-
+    
 	// Allocating memory
     alloc_arr( suff_size , n_thds );
 	
@@ -130,30 +221,38 @@ void myfunc( int suff_size )
 
     alloc2d     ( &cpu_bucket_ct , n_buck , n_thds );
     alloc2d_gpu ( &gpu_bucket_ct , n_buck , n_thds );
-    init2d      ( cpu_bucket_ct , n_buck , n_thds , 0 );
+    init2d      ( cpu_bucket_ct , n_buck , n_thds , 1 );
     copy2gpu    ( cpu_bucket_ct , gpu_bucket_ct , n_buck * n_thds );
-   
+    
     int s_seg = suff_size / n_thds;
     
-    bucketSort2<<< blkGridRows, thdBlkRows >>>(  suff_size , b_size , s_seg ,
+   bucketSort2<<< blkGridRows, thdBlkRows >>>(  suff_size , b_size , s_seg ,
                                                 gpu_genome , gpu_suf_arr, 
                                                 gpu_aux_arr , gpu_bucket_ct);
-    /* Insert Ppfix sum here */
+
+    
+    // Parallel prefix block and grid dimensions
+    int n_el = n_thds;
+    int PP_blkGridWidth = n_el/thd_per_blk + 1;
+    dim3 PP_blkGridRows(PP_blkGridWidth, blkGridHeight);
+    dim3 PP_thdBlkRows(thd_per_blk, 1);
+    
+    for(int i = 0; i < n_buck ; i++)
+    { 
+        prefixCompute(gpu_bucket_ct, PP_blkGridRows, PP_thdBlkRows, thd_per_blk , i*n_thds , (i+1)*n_thds -1, n_thds);
+    }
+    
     cudaMemcpy( cpu_bucket_ct , gpu_bucket_ct , 
                 n_buck * n_thds * sizeof(int), cudaMemcpyDeviceToHost);
-    /*
-        1.  a. TODO:Do par-pref-sum on gpu_bucket_ct 
-        2.  a. Call BsortWriteBack to copy the suffixes to aux array
+    
+    /*TODO:
+            a. Call BsortWriteBack to copy the suffixes to aux array
             b. Copy back to CPU
     */ 
+    
     for( int i = 0; i < n_buck; i++)
     {
-        int sum = 0;
-        for(int j = 0 ; j < n_thds ; j++ )
-        {
-            sum += cpu_bucket_ct[ i * n_thds + j];
-        }
-        printf(" Bucket %d : %d\n", i , sum );
+        printf(" Bucket %d : %d\n", i , cpu_bucket_ct[i*n_thds -1] );
     }
     
     
@@ -163,6 +262,7 @@ void myfunc( int suff_size )
                 sizeof(int ) * suff_size, 
                 cudaMemcpyDeviceToHost);
     // Final results
+    
     int debug = 0;
     if(debug){
         for( int i = 0; i < n_buck; i++)
@@ -182,7 +282,6 @@ void myfunc( int suff_size )
 int main( int argc, char** argv) 
 {
     myfunc( atoi(argv[1]) );	
-    //test(10,100);
     return 0;
 }
 
