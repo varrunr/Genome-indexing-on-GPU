@@ -9,10 +9,11 @@ std::vector< std::string > buckets;
 int     nbuckets;
 int     *cpu_bucket_ct;
 int     *gpu_bucket_ct;
+int     b_size;
+int     n_buck;
 
 void    gen_perms       ( uint32 , std::string );
 void    create_buckets  ( int ); 
-
 
 void    alloc2d         (int ** , int , int );
 void    init2d          (int * , int , int , int );
