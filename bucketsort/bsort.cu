@@ -12,7 +12,6 @@ using namespace std;
 #include "bsort.h"
 
 
-void test(int,int);
 __device__  int g_pivotIndex;
 
 __device__ int strcmp_cuda(char *source, char *dest)
@@ -111,9 +110,10 @@ __global__ void block_scan_write_up( int *g_idata, int block_offset, int block_s
 							( blockIdx.x * blockDim.x * blockDim.y ) \
 							+ ( blockIdx.y * blockDim.x * blockDim.y * gridDim.x)); 
 
-    if(tid >=start && tid<=end)
+    int prev_block_offset = block_offset/block_size;
+
+    if((((tid+1)*prev_block_offset) - 1) >=start && (((tid+1)*prev_block_offset) - 1)<=end)
     {
-	    int prev_block_offset = block_offset/block_size;
 	        
 	    int prev_block_index = (((tid+1)*prev_block_offset) - 1);
 	    
@@ -183,13 +183,20 @@ void prefixCompute( int *gpu_prefix_arr, dim3 blockGridRows, dim3 threadBlockRow
 	for(int i=0; i<=l; i++)
 	{
 		block_offset = pow((float)block_size, i);
-		block_scan <<< blockGridRows, threadBlockRows, sharedMemory>>> (gpu_prefix_arr, block_offset, block_size, start, end, prefixesCount);
+		block_scan <<<  blockGridRows, 
+                        threadBlockRows, 
+                        sharedMemory >>> (  gpu_prefix_arr, block_offset, 
+                                            block_size, start, end, 
+                                            prefixesCount);
 		cudaThreadSynchronize();
 	}
 	for(int i=l; i > 0; i--)
 	{
 		block_offset = pow((float)block_size, i);	
-		block_scan_write_up <<< blockGridRows, threadBlockRows, sharedMemory>>> ( gpu_prefix_arr, block_offset, block_size, start, end, prefixesCount);
+		block_scan_write_up <<< blockGridRows, 
+                                threadBlockRows, 
+                                sharedMemory>>>(gpu_prefix_arr, block_offset, block_size, 
+                                                start, end, prefixesCount);
 		cudaThreadSynchronize();
 	}
 
@@ -221,38 +228,44 @@ void myfunc( int suff_size )
 
     alloc2d     ( &cpu_bucket_ct , n_buck , n_thds );
     alloc2d_gpu ( &gpu_bucket_ct , n_buck , n_thds );
-    init2d      ( cpu_bucket_ct , n_buck , n_thds , 1 );
+    init2d      ( cpu_bucket_ct , n_buck , n_thds , 0 );
     copy2gpu    ( cpu_bucket_ct , gpu_bucket_ct , n_buck * n_thds );
     
     int s_seg = suff_size / n_thds;
     
-   bucketSort2<<< blkGridRows, thdBlkRows >>>(  suff_size , b_size , s_seg ,
+    
+    
+    bucketSort2<<< blkGridRows, thdBlkRows >>> (suff_size , b_size , s_seg ,
                                                 gpu_genome , gpu_suf_arr, 
                                                 gpu_aux_arr , gpu_bucket_ct);
-
     
     // Parallel prefix block and grid dimensions
-    int n_el = n_thds;
+    int n_el = n_thds * n_buck;
     int PP_blkGridWidth = n_el/thd_per_blk + 1;
     dim3 PP_blkGridRows(PP_blkGridWidth, blkGridHeight);
     dim3 PP_thdBlkRows(thd_per_blk, 1);
     
-    for(int i = 0; i < n_buck ; i++)
+    for(int i = 0; i < n_buck; i++)
     { 
-        prefixCompute(gpu_bucket_ct, PP_blkGridRows, PP_thdBlkRows, thd_per_blk , i*n_thds , (i+1)*n_thds -1, n_thds);
+        prefixCompute(  gpu_bucket_ct, PP_blkGridRows, 
+                        PP_thdBlkRows, thd_per_blk , 
+                        i*n_thds , (i+1)*n_thds -1, n_el);
     }
-    
+       
     cudaMemcpy( cpu_bucket_ct , gpu_bucket_ct , 
-                n_buck * n_thds * sizeof(int), cudaMemcpyDeviceToHost);
-    
+                n_buck * n_thds * sizeof(int), 
+                cudaMemcpyDeviceToHost);
+  
     /*TODO:
             a. Call BsortWriteBack to copy the suffixes to aux array
             b. Copy back to CPU
-    */ 
-    
-    for( int i = 0; i < n_buck; i++)
+    */
+     
+    int offset = 0;;
+    for( int i = 0; i < n_buck ; i++)
     {
-        printf(" Bucket %d : %d\n", i , cpu_bucket_ct[i*n_thds -1] );
+        offset = (i + 1) * n_thds - 1;
+        printf(" Bucket %d : %d\n", i , cpu_bucket_ct[offset] );
     }
     
     
