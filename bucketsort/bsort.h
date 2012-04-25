@@ -9,9 +9,10 @@ std::vector< std::string > buckets;
 int     nbuckets;
 int     *cpu_bucket_ct;
 int     *gpu_bucket_ct;
+int     *fin_bucket_ct;
 int     b_size;
 int     n_buck;
-
+int     n_el;
 void    gen_perms       ( uint32 , std::string );
 void    create_buckets  ( int ); 
 
