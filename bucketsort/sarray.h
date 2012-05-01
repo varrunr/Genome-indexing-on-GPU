@@ -21,7 +21,7 @@
     char    *cpu_genome;
 
     /* Functions */
-    void    myfunc          ( int );
+
     void    read_genome2    ( char* , char* , int );
     int     setup           (int, char*);
     void    alloc_arr       (int,int);

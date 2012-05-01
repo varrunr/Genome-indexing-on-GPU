@@ -16,9 +16,12 @@ int     n_el;
 void    gen_perms       ( uint32 , std::string );
 void    create_buckets  ( int ); 
 
+void    do_bsort        ( int , int);
+
 void    alloc2d         (int ** , int , int );
 void    init2d          (int * , int , int , int );
 void    alloc2d_gpu     (int ** , int , int );
 void    print2d         (int * , int , int );
 void    copy2gpu        (int * , int * , int );
+
 #endif

@@ -202,15 +202,15 @@ void prefixCompute( int *gpu_prefix_arr, dim3 blockGridRows, dim3 threadBlockRow
 
 }
 
-void init_b()
+void init_b(int prefix_len)
 {
-    b_size = 2;
+    b_size = prefix_len;
     n_buck = (int) pow( NALPHA , b_size);
     n_el = n_thds * n_buck;
     fin_bucket_ct = (int *) malloc( sizeof(int) * n_buck );
 }
 
-void myfunc( int suff_size )
+void do_bsort( int suff_size , int prefix_len)
 {
     /* Read genome from disk */
     setup( suff_size , "genome" );
@@ -225,7 +225,7 @@ void myfunc( int suff_size )
 	
     /* Setting values */
     init_arr( suff_size , n_thds );
-    init_b();
+    init_b(prefix_len);
 
     /* Copying values to device */
     copy2dev( suff_size , n_thds );
@@ -280,29 +280,64 @@ void myfunc( int suff_size )
     cudaMemcpy( cpu_final_arr, gpu_aux_arr, 
                 sizeof(int ) * suff_size, 
                 cudaMemcpyDeviceToHost);
-
+        
     /* Final results */
-    int debug = 1 , start = 0;
+    int debug = 0 , bstart = 0;
     if(debug){
         for( int i = 0; i < n_buck; i++)
         {
-            if(i>0) start = fin_bucket_ct[i-1];
+            if(i>0) bstart = fin_bucket_ct[i-1];
             printf("Bucket %d :",i);
-            for(int j = start ; j < fin_bucket_ct[i] ; j++ )
+            for(int j = bstart ; j < fin_bucket_ct[i] ; j++ )
             {
                  printf("%d,",cpu_final_arr[j]);
             }
             printf("\n");
         }
-
-    }
-    
+    }  
 }
 
 int main( int argc, char** argv) 
 {
-    myfunc( atoi(argv[1]) );	
+    int suff_size = atoi(argv[1]);
+    int prefix_len = 2;
+    /* Distribute suffixes into buckets */
+    do_bsort( suff_size , prefix_len );
+    /* Do Quick Sort on buckets */
+    do_preproc_qsort(suff_size);
+
     return 0;
+}
+
+void do_preproc_qsort(int suff_size)
+{
+    start = (int *) malloc( sizeof(int) * suff_size);
+    end   = (int *) malloc( sizeof(int) * suff_size);
+    
+    int bstart = 0;
+    for( int i = 0; i < n_buck; i++)
+    {
+        if(i>0) bstart = fin_bucket_ct[i-1];
+        for(int j = bstart ; j < fin_bucket_ct[i] ; j++ )
+        {
+            start[ cpu_final_arr[j] ] = bstart;
+            end[ cpu_final_arr[j] ] = fin_bucket_ct[i] - 1;
+        }
+    }
+    int debug = 0;
+    if(debug){
+        cout<<"Start"<<endl;
+        for(int i=0; i < suff_size ; i++)
+        {
+            cout<<start[i]<<" ";
+        }cout<<endl;
+    
+        cout<<"End"<<endl;
+        for(int i=0; i < suff_size ; i++)
+        {
+            cout<<end[i]<<" ";
+        }cout<<endl;
+    }
 }
 
 void copy2gpu( int *frm , int *dest , int size)
