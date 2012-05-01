@@ -10,7 +10,7 @@
 using namespace std;
 #include "sarray.h"
 #include "bsort.h"
-
+#include "qsort.h"
 
 __device__  int g_pivotIndex;
 
@@ -280,7 +280,7 @@ void myfunc( int suff_size )
     cudaMemcpy( cpu_final_arr, gpu_aux_arr, 
                 sizeof(int ) * suff_size, 
                 cudaMemcpyDeviceToHost);
-    
+
     /* Final results */
     int debug = 1 , start = 0;
     if(debug){
