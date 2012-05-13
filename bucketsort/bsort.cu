@@ -28,7 +28,8 @@ __device__ int get_index(int c)
     if(c==(int)'A')return 0;
     if(c==(int)'C')return 1;
     if(c==(int)'G')return 2;
-    return 3;
+    if(c==(int)'T')return 3;
+    return 0;
 }
 
 __device__ int get_bucket_no(char *perm, int b_size)
@@ -173,8 +174,7 @@ __global__ void block_scan( int *g_idata, int block_offset, int block_size, int 
 }
 
 void prefixCompute( int *gpu_prefix_arr, dim3 blockGridRows, dim3 threadBlockRows, 
-                    int block_size, int start, int end, int prefixesCount)
-{
+                    int block_size, int start, int end, int prefixesCount){
 	int sharedMemory = 2*block_size*sizeof(int);
 	
 	int block_offset = 0;
@@ -305,7 +305,7 @@ int main( int argc, char** argv)
     do_bsort( suff_size , prefix_len );
     /* Do Quick Sort on buckets */
     do_preproc_qsort(suff_size);
-
+    
     return 0;
 }
 
@@ -320,11 +320,11 @@ void do_preproc_qsort(int suff_size)
         if(i>0) bstart = fin_bucket_ct[i-1];
         for(int j = bstart ; j < fin_bucket_ct[i] ; j++ )
         {
-            start[ cpu_final_arr[j] ] = bstart;
-            end[ cpu_final_arr[j] ] = fin_bucket_ct[i] - 1;
+            start[ j ] = bstart;
+            end[ j ] = fin_bucket_ct[i] - 1;
         }
     }
-    int debug = 0;
+    int debug = 1;
     if(debug){
         cout<<"Start"<<endl;
         for(int i=0; i < suff_size ; i++)
