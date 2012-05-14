@@ -16,7 +16,7 @@ Run as
 
 ``` ./qsort <suffix_size, multiple of 1024> <genome_file> ```
 
-e.g. ``` ./bsort 10240 genome ```
+e.g. ``` ./qsort 10240 genome ```
 
 
 ```bucketsort/bsort.cu``` - Parallel Bucket sort based on common prefix.
