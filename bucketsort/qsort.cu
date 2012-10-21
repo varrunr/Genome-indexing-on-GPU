@@ -7,11 +7,11 @@
 #include <math.h>
 #include <algorithm>
 #include <cutil_inline.h>
-
-using namespace std;
 #include "sarray.h"
 #include "bsort.h"
 #include "qsort.h"
+
+using namespace std;
 
 __device__  int g_pivotIndex;
 
@@ -719,7 +719,7 @@ void quick_sort_genome(int *device_arr, long unsigned int suff_size)
     {   
         int total_shared_memory = block_size*(sizeof(int));
         quickSortGPU<<<blockGridRows, threadBlockRows, total_shared_memory>>>(sh_gpu_suf_arr, sh_gpu_suf_arr_copy, sh_gpu_aux_arr, start_ind_arr, end_ind_arr, start_ind_arr_copy, end_ind_arr_copy, gpu_genome, block_size, suff_size);
-        CUT_CHECK_ERROR("Quick sort Kernel execution failed\n");
+//        CUT_CHECK_ERROR("Quick sort Kernel execution failed\n");
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
         
 //        sh_prefixCompute(sh_gpu_aux_arr, blockGridRows, threadBlockRows, block_size, suff_size);
@@ -845,7 +845,7 @@ void sort_buckets(int *gpu_aux_arr, int suff_size)
     // Final results
     CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_aux_arr, sizeof(int) * suff_size, cudaMemcpyDeviceToHost) );
     //cout << "Suffix Array for Genome: " << endl;
-    //print(cpu_final_arr, suff_size);
+    //print_gene_array(cpu_final_arr, suff_size);
 
 }
 
