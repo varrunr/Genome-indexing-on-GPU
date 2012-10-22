@@ -511,7 +511,7 @@ __global__ void quickSortGPU(   int *sh_gpu_suf_arr, int *sh_gpu_suf_arr_copy, i
     }
 }
 
-__device__ int terminate_t;
+__device__ int terminate_t = 1;
 
 __global__ void write_pivot(int *sh_gpu_suf_arr, int *sh_gpu_suf_arr_copy, int *sh_gpu_aux_arr, 
                             int *start_ind_arr, int *end_ind_arr, int *start_ind_arr_copy, 
@@ -627,12 +627,12 @@ void quick_sort_genome(int *device_arr, long unsigned int suff_size)
     CUDA_SAFE_CALL( cudaThreadSynchronize() );
 
     // Kernel Execution
-    int end_loop = suff_size;
+    int end_loop = 0;
     while(true)
     {   
         int total_shared_memory = block_size*(sizeof(int));
         quickSortGPU<<<blockGridRows, threadBlockRows, total_shared_memory>>>(sh_gpu_suf_arr, sh_gpu_suf_arr_copy, sh_gpu_aux_arr, start_ind_arr, end_ind_arr, start_ind_arr_copy, end_ind_arr_copy, gpu_genome, block_size, suff_size);
-//        CUT_CHECK_ERROR("Quick sort Kernel execution failed\n");
+        CUT_CHECK_ERROR("Quick sort Kernel execution failed\n");
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
         
         prefixCompute(sh_gpu_aux_arr, blockGridRows, threadBlockRows, block_size, 0, suff_size-1, suff_size);
@@ -643,10 +643,10 @@ void quick_sort_genome(int *device_arr, long unsigned int suff_size)
         write_pivot <<< blockGridRows, threadBlockRows >>> (sh_gpu_suf_arr, sh_gpu_suf_arr_copy, sh_gpu_aux_arr_copy, start_ind_arr, end_ind_arr, start_ind_arr_copy, end_ind_arr_copy, suff_size);
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
     
-//        cudaMemcpyFromSymbol(&end_loop, "terminate_t", sizeof(end_loop), 0, cudaMemcpyDeviceToHost);
+        cudaMemcpyFromSymbol(&end_loop, terminate_t, sizeof(end_loop), 0, cudaMemcpyDeviceToHost);
 
 //        printf("Execute More:- %d \n", end_loop);
-        if(--end_loop == 0)
+        if(end_loop == 0)
         {
             break;
         }
