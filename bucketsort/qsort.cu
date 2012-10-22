@@ -7,11 +7,11 @@
 #include <math.h>
 #include <algorithm>
 #include <cutil_inline.h>
-
-using namespace std;
 #include "sarray.h"
 #include "bsort.h"
 #include "qsort.h"
+
+using namespace std;
 
 __device__  int g_pivotIndex;
 
@@ -452,93 +452,6 @@ void create_buckets(int bucket_size)
     gen_perms(bucket_size,"");
 }
 
-__global__ void sh_block_scan_write_up( int *g_idata, int block_offset, int block_size, int n)
-{
-    int tid = (int) (threadIdx.x + blockDim.x * threadIdx.y + \
-                            ( blockIdx.x * blockDim.x * blockDim.y ) \
-                            + ( blockIdx.y * blockDim.x * blockDim.y * gridDim.x)); 
-
-    int prev_block_offset = block_offset/block_size;
-        
-    int prev_block_index = (((tid+1)*prev_block_offset) - 1);
-    
-    int x = prev_block_index/block_offset;
-    if((((tid+1)*prev_block_offset) - 1) < n)
-    {
-        if((prev_block_index+1) % block_offset != 0 && x > 0)
-        {
-            g_idata[prev_block_index] += g_idata[(x)*block_offset - 1];     
-        }       
-    }
-}
-
-__global__ void sh_block_scan( int *g_idata, int block_offset, int block_size, int n) 
-{ 
-    extern __shared__ int temp[]; // allocated on invocation 
-
-    int tid = (int) (threadIdx.x + blockDim.x * threadIdx.y + \
-                            ( blockIdx.x * blockDim.x * blockDim.y ) \
-                            + ( blockIdx.y * blockDim.x * blockDim.y * gridDim.x)); 
-
-    int thid = threadIdx.x; 
-    int pout = 0, pin = 1; 
-    int n1 = block_size;
-    temp[thid] = 0;
-    temp[n1+thid] = 0;
-
-    // load input into shared memory.  
-    if( (((tid+1)*block_offset) - 1) < n)
-    {
-        temp[pout*n1 + thid] = g_idata[((tid+1)*block_offset) - 1];  
-        temp[pin*n1 + thid] = g_idata[((tid+1)*block_offset) - 1]; 
-    }
-    else
-    {
-        temp[pout*n1 + thid] = 0; 
-        temp[pin*n1 + thid] = 0; 
-    }
-
-    __syncthreads(); 
-
-    for (int offset = 1; offset < n1; offset *= 2) 
-    { 
-        pout = 1 - pout; // swap double buffer indices 
-        pin  = 1 - pin; 
-
-        if (thid >= offset) 
-            temp[pout*n1+thid] = temp[pin*n1+thid] + temp[pin*n1+thid - offset]; 
-        else 
-            temp[pout*n1+thid] = temp[pin*n1+thid]; 
-
-        __syncthreads(); 
-    }
-
-    if( (((tid+1)*block_offset) - 1) < n)
-        g_idata[((tid+1)*block_offset) - 1] = temp[pout*n1+thid];
-}
-
-void sh_prefixCompute(int *gpu_prefix_arr, dim3 blockGridRows, dim3 threadBlockRows, int block_size, int prefixesCount)
-{
-    int sharedMemory = 2*block_size*sizeof(int);
-    
-    int block_offset = 0;
-    int l = log2((float)prefixesCount)/log2((float)block_size);
-
-    for(int i=0; i<=l; i++)
-    {
-        block_offset = pow((float)block_size, i);
-        sh_block_scan <<< blockGridRows, threadBlockRows, sharedMemory>>> (gpu_prefix_arr, block_offset, block_size, prefixesCount);
-        CUDA_SAFE_CALL( cudaThreadSynchronize() );
-    }
-    for(int i=l; i > 0; i--)
-    {
-        block_offset = pow((float)block_size, i);   
-        sh_block_scan_write_up <<< blockGridRows, threadBlockRows, sharedMemory>>> ( gpu_prefix_arr, block_offset, block_size, prefixesCount);
-        CUDA_SAFE_CALL( cudaThreadSynchronize() );
-    }
-
-}
-
 __device__ int get_pivot_index(int start, int end)
 {
     /*
@@ -598,7 +511,7 @@ __global__ void quickSortGPU(   int *sh_gpu_suf_arr, int *sh_gpu_suf_arr_copy, i
     }
 }
 
-__device__ int terminate_t;
+__device__ int terminate_t = 1;
 
 __global__ void write_pivot(int *sh_gpu_suf_arr, int *sh_gpu_suf_arr_copy, int *sh_gpu_aux_arr, 
                             int *start_ind_arr, int *end_ind_arr, int *start_ind_arr_copy, 
@@ -722,7 +635,6 @@ void quick_sort_genome(int *device_arr, long unsigned int suff_size)
         CUT_CHECK_ERROR("Quick sort Kernel execution failed\n");
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
         
-//        sh_prefixCompute(sh_gpu_aux_arr, blockGridRows, threadBlockRows, block_size, suff_size);
         prefixCompute(sh_gpu_aux_arr, blockGridRows, threadBlockRows, block_size, 0, suff_size-1, suff_size);
     
         adjust_prefix_sum <<< blockGridRows, threadBlockRows >>> (sh_gpu_aux_arr, sh_gpu_aux_arr_copy, start_ind_arr, end_ind_arr, suff_size);
@@ -731,8 +643,9 @@ void quick_sort_genome(int *device_arr, long unsigned int suff_size)
         write_pivot <<< blockGridRows, threadBlockRows >>> (sh_gpu_suf_arr, sh_gpu_suf_arr_copy, sh_gpu_aux_arr_copy, start_ind_arr, end_ind_arr, start_ind_arr_copy, end_ind_arr_copy, suff_size);
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
     
-        cudaMemcpyFromSymbol(&end_loop, "terminate_t", sizeof(end_loop), 0, cudaMemcpyDeviceToHost);
+        cudaMemcpyFromSymbol(&end_loop, terminate_t, sizeof(end_loop), 0, cudaMemcpyDeviceToHost);
 
+//        printf("Execute More:- %d \n", end_loop);
         if(end_loop == 0)
         {
             break;
@@ -745,11 +658,12 @@ void set_quickSort_kernel(int suff_size)
 {
     // Get Device Properties
     cudaDeviceProp prop;
-    int count, MAX_THREADS_PER_BLOCK;
+    int count; 
+//    int MAX_THREADS_PER_BLOCK;
     int maxBlockGridWidth, maxBlockGridHeight, maxBlockGridDepth;
     cudaGetDeviceCount(&count);
     cudaGetDeviceProperties(&prop, 0);
-    MAX_THREADS_PER_BLOCK = prop.maxThreadsPerBlock;
+//    MAX_THREADS_PER_BLOCK = prop.maxThreadsPerBlock;
     maxBlockGridWidth = prop.maxGridSize[0];
     maxBlockGridHeight = prop.maxGridSize[1];
     maxBlockGridDepth = prop.maxGridSize[2];
@@ -839,13 +753,23 @@ void sort_buckets(int *gpu_aux_arr, int suff_size)
             before = fin_bucket_ct[i-1];
         }
 //        printf("Bucket %d: %d\n", i, size); 
+
+//        CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_aux_arr+before, sizeof(int) * size, cudaMemcpyDeviceToHost) );
+//        cout << "\n\n\nSuffix Array Before Sorting Genome: " << endl;
+//        print_gene_array(cpu_final_arr, size);
+
         quick_sort_genome(gpu_aux_arr+before, size);        
+
+//        CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_aux_arr+before, sizeof(int) * size, cudaMemcpyDeviceToHost) );
+//        cout << "\n\n\n\nSuffix Array After Sorting Genome: " << endl;
+//        print_gene_array(cpu_final_arr, size);
+//        if(i==1) break;
     }    
 
     // Final results
     CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_aux_arr, sizeof(int) * suff_size, cudaMemcpyDeviceToHost) );
-    //cout << "Suffix Array for Genome: " << endl;
-    //print(cpu_final_arr, suff_size);
+    cout << "Suffix Array for Genome: " << endl;
+    print_gene_array(cpu_final_arr, suff_size);
 
 }
 
