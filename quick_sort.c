@@ -57,8 +57,10 @@ void quicksort(int* x, int first, int last){
 void print_suffix_list(int *list, int len){
     int i=0;
     for(i=0; i<len; i++){
-        printf("%d: %s\n", list[i], genome+list[i]);
+        printf("%d", list[i]);
+        if(i != (len - 1)) printf(" ");
     }
+    printf("\n");
 }
 
 int main(int argc, char *argv[]){
@@ -66,13 +68,13 @@ int main(int argc, char *argv[]){
 	double runTime;
 
 
-    if(argc != 2){
+    if(argc != 3){
         printf("Usage: ./build_suffix_array <num of bases to read>\n");
         exit(-1);
     }
     
     int num = atoi(argv[1]);
-    char *filename = "genome";
+    char *filename = argv[2];
 
 	start = clock();
     genome = (char *) malloc((num+1)*sizeof(char));
@@ -82,13 +84,13 @@ int main(int argc, char *argv[]){
 
     int *suffix_list = get_suffix_list(strlen(genome));
     quicksort(suffix_list, 0, genome_len-1);
-//   print_suffix_list(suffix_list, genome_len);
+    print_suffix_list(suffix_list, genome_len);
     
 	end = clock();
 	free(genome);
 
 	runTime = (end - start) / (double) CLOCKS_PER_SEC ;
-	printf("%d %f\n", num, runTime);
+	//printf("%d %f\n", num, runTime);
 }
 
 
