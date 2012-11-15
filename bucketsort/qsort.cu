@@ -6,11 +6,11 @@
 #include <string.h>
 #include <math.h>
 #include <algorithm>
-#include <cutil_inline.h>
 #include "sarray.h"
 #include "bsort.h"
 #include "qsort.h"
 
+#define CUDA_SAFE_CALL(x) x
 using namespace std;
 
 __device__  int g_pivotIndex;
@@ -632,17 +632,29 @@ void quick_sort_genome(int *device_arr, long unsigned int suff_size)
     {   
         int total_shared_memory = block_size*(sizeof(int));
         quickSortGPU<<<blockGridRows, threadBlockRows, total_shared_memory>>>(sh_gpu_suf_arr, sh_gpu_suf_arr_copy, sh_gpu_aux_arr, start_ind_arr, end_ind_arr, start_ind_arr_copy, end_ind_arr_copy, gpu_genome, block_size, suff_size);
-        CUT_CHECK_ERROR("Quick sort Kernel execution failed\n");
+        //CUT_CHECK_ERROR("Quick sort Kernel execution failed\n");
+        #ifdef CUTIL
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
+        #else
+        cudaThreadSynchronize();
+        #endif
         
         prefixCompute(sh_gpu_aux_arr, blockGridRows, threadBlockRows, block_size, 0, suff_size-1, suff_size);
     
         adjust_prefix_sum <<< blockGridRows, threadBlockRows >>> (sh_gpu_aux_arr, sh_gpu_aux_arr_copy, start_ind_arr, end_ind_arr, suff_size);
+         #ifdef CUTIL
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
-            
+        #else
+        cudaThreadSynchronize();
+        #endif
+
         write_pivot <<< blockGridRows, threadBlockRows >>> (sh_gpu_suf_arr, sh_gpu_suf_arr_copy, sh_gpu_aux_arr_copy, start_ind_arr, end_ind_arr, start_ind_arr_copy, end_ind_arr_copy, suff_size);
+        #ifdef CUTIL
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
-    
+        #else
+        cudaThreadSynchronize();
+        #endif
+
         cudaMemcpyFromSymbol(&end_loop, terminate_t, sizeof(end_loop), 0, cudaMemcpyDeviceToHost);
 
 //        printf("Execute More:- %d \n", end_loop);
@@ -673,8 +685,8 @@ void set_quickSort_kernel(int suff_size)
 
     if((unsigned long int)suff_size > (int)(maxBlockGridWidth * maxBlockGridHeight * maxBlockGridDepth * block_size))
     {
-        cout << "Suffix Array Length out of Device block Size" << endl;
-        exit(1);        
+        //cout << "Suffix Array Length out of Device block Size" << endl;
+        //exit(1);        
     }
 
     int blockGridWidth = suff_size/block_size + 1;
