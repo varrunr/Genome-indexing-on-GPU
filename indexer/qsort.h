@@ -17,13 +17,10 @@ int *sh_gpu_suf_arr_copy;
 int *sh_gpu_aux_arr;
 int *sh_gpu_aux_arr_copy;
 
-void do_preproc_qsort(int);
-void set_quickSort_kernel();
 void set_quickSort_kernel(unsigned long int suff_size);
 void alloc_device_pointers(unsigned long int suff_size);
 void free_memory();
-void sort_buckets(int *gpu_aux_arr, int suff_size);
 void quick_sort_genome(int *device_arr, unsigned long int suff_size);
-void quick_sort_bucket(int *device_arr, int bucket_size);
+void quick_sort_bucket(int *device_arr, int bucket_size, int bucket_number, bool last_bucket);
 
 #endif

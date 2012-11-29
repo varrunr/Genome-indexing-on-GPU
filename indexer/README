@@ -1,0 +1,26 @@
+NOTES:
+
+1. Separated the code for bucket sort and quick sort. In the current folder 'Indexer' contains only quick sort in qsort.cu
+
+2. The following method is exposed from the qsort.h file.
+
+	void quick_sort_bucket(int *device_arr, int bucket_size, int bucket_number, bool last_bucket);
+
+	device_arr : Gpu Suffix array which we want to quick sort.
+	bucket_size : Size of the bucket.
+	bucket_number : The index of the bucket if say we have total number of buckets as 64, 
+					bucket_number = [0,63]
+	last_bucket : true or false value. True if the current bucket is the last bucket. 
+					i.e. bucket_number = 63 in the above example.
+
+3. Also Please make sure you invoke a set_quickSort_kernel function shown below once before invoking quick_sort_bucket. This method just sets the 'blockGridRows' and 'threadBlockRows' values for execution of the kernel. I believe you will be using the same values so you can just invoke it before doing your bucket/creation step.
+
+    set_quickSort_kernel(suff_size);
+
+4. Compile: nvcc -o qsort qsort.cu pprefix.cu 
+
+5. Run: ./qsort 1024 homo_sapiens_genome > tmp
+
+6. Also, Code for Parallel Prefix sum has been separated into pprefix.cu and pprefix.h
+
+7. Please include pprefix.h to execute the 'prefixCompute' method for parallel prefix sum.
