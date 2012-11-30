@@ -338,17 +338,10 @@ void free_gpu_memory(){
 }
 
 
-static int max_bucket_size = -1;
-
-void quick_sort_bucket(int *device_arr, char *gpu_genome, int bucket_size, int bucket_number, bool last_bucket){
+void quick_sort_bucket(int *device_arr, char *gpu_genome, int bucket_size, int bucket_number, bool last_bucket, int max_bucket_size){
 
     if(bucket_number == 0){
-        alloc_device_pointers(bucket_size);
-        max_bucket_size = bucket_size;        
-    } else if(max_bucket_size < bucket_size){
-        free_gpu_memory();
-        alloc_device_pointers(bucket_size);
-        max_bucket_size = bucket_size;
+        alloc_device_pointers(max_bucket_size);
     }
 
     quick_sort_genome(device_arr, bucket_size, gpu_genome);

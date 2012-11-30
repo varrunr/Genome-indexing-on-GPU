@@ -127,8 +127,11 @@ int main( int argc, char** argv)
         /*
             Do Quick sort here on gpu_aux_arr[0...n_buck]
          */
-        
-        //quick_sort_bucket(gpu_suf_arr, gpu_genome,  suff_size, 0, true);
+        if(i == b_info->n_buckets-1){
+            quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, true, b_info->max_bucket_sz);
+        } else {
+            quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, false, b_info->max_bucket_sz);
+        }
         
         if(n_buck > 0)
         {
@@ -142,18 +145,15 @@ int main( int argc, char** argv)
         }
     }
     
-    /*
-    CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_suf_arr, sizeof(int) * suff_size, cudaMemcpyDeviceToHost) );
+//    CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_suf_arr, sizeof(int) * suff_size, cudaMemcpyDeviceToHost) );
     cout << "Suffix Array for Genome: " << endl;
-    print_gene_array(cpu_final_arr, suff_size);
-
+    print_gene_array(cpu_suf_arr, suff_size);
 
     cudaEventRecord( stop, 0 );
     cudaEventSynchronize( stop );
     cudaEventElapsedTime( &elapsedTime, start, stop );
 
     printf("%d %f\n", suff_size, elapsedTime * (0.001));
-    */
     
     free_memory();
 
