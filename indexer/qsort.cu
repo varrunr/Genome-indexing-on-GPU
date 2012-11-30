@@ -6,43 +6,31 @@
 #include <string.h>
 #include <math.h>
 #include <algorithm>
-#include "sarray.h"
 #include "qsort.h"
 #include "pprefix.h"
 
 #define CUDA_SAFE_CALL(x) x
+
 using namespace std;
 
+int *start_ind_arr;
+int *end_ind_arr;
+int *start_ind_arr_copy;
+int *end_ind_arr_copy;
+int *sh_gpu_suf_arr;
+int *sh_gpu_suf_arr_copy;
+int *sh_gpu_aux_arr;
+int *sh_gpu_aux_arr_copy;
+
+dim3 blockGridRows;
+dim3 threadBlockRows;
+int block_size;
+
+void alloc_device_pointers(unsigned long int suff_size);
+
+void quick_sort_genome(int *device_arr, unsigned long int suff_size, char *gpu_genome);
+
 __device__  int g_pivotIndex;
-
-void print(int *array, int n)
-{
-    for(int i=0; i < n; i++)
-        cout << array[i] << endl;
-}
-
-void print_gene_array(int *array, int n)
-{
-    for(int i=0;i<n;i++){
-        printf("%d - %s\n", array[i], cpu_genome+array[i]);
-    }
-}
-
-int setup( int num , char* filename ) 
-{
-    cpu_genome = (char *) malloc(sizeof(char)*(num+1));
-    read_genome2(filename, cpu_genome, num);
-    return (strlen(cpu_genome));        
-}
-
-void read_genome2(char *filename, char *buffer, int num)
-{
-    FILE *fh;
-    fh = fopen(filename, "r");
-    fread(buffer, 1, num, fh);
-    buffer[num] = '\0';
-    fclose(fh);
-}
 
 __device__ int strcmp_cuda(char *source, char *dest)
 {
@@ -233,7 +221,7 @@ __global__ void init_suffix_array(int *device_arr, int n)
 
 }
 
-void quick_sort_genome(int *device_arr, long unsigned int suff_size)
+void quick_sort_genome(int *device_arr, long unsigned int suff_size, char *gpu_genome)
 {
 
     sh_gpu_suf_arr = device_arr;
@@ -349,19 +337,10 @@ void free_gpu_memory(){
     cudaFree(end_ind_arr_copy);
 }
 
-void free_memory()
-{
-    free(cpu_genome);
-    free(cpu_suf_arr);
-    free(cpu_final_arr);
-    cudaFree(gpu_genome);
-    cudaFree(gpu_aux_arr);
-    cudaFree(gpu_suf_arr);
-}
 
 static int max_bucket_size = -1;
 
-void quick_sort_bucket(int *device_arr, int bucket_size, int bucket_number, bool last_bucket){
+void quick_sort_bucket(int *device_arr, char *gpu_genome, int bucket_size, int bucket_number, bool last_bucket){
 
     if(bucket_number == 0){
         alloc_device_pointers(bucket_size);
@@ -372,78 +351,10 @@ void quick_sort_bucket(int *device_arr, int bucket_size, int bucket_number, bool
         max_bucket_size = bucket_size;
     }
 
-    quick_sort_genome(device_arr, bucket_size);
+    quick_sort_genome(device_arr, bucket_size, gpu_genome);
 
     if(last_bucket){
         free_gpu_memory();
     }
 
-}
-
-void init_arr(int suff_size)
-{
-    for(int i=0;i<suff_size;i++)
-    {
-        cpu_suf_arr[i] = (int)i;
-        //printf("%d - %s\n", cpu_suf_arr[i], cpu_genome+i);
-    }
-    for(int i=0;i<suff_size;i++)
-    {
-        cpu_final_arr[i] = 0;
-    } 
-}
-
-void copy_to_memory( int suff_size)
-{
-    // Copy the data to the device
-    cudaMemcpy( gpu_suf_arr, cpu_suf_arr, sizeof(int) * suff_size, 
-                cudaMemcpyHostToDevice);
-    
-    cudaMemcpy( gpu_genome, cpu_genome, sizeof(char) * suff_size, 
-                cudaMemcpyHostToDevice);
-    
-    cudaMemcpy( gpu_aux_arr, cpu_final_arr, sizeof(int) * suff_size, 
-                cudaMemcpyHostToDevice);
-}
-
-int main( int argc, char** argv) 
-{
-    int suff_size = atoi(argv[1]);
-
-    /* Read genome from disk */
-    setup(suff_size, argv[2] );
-
-    cudaEvent_t start, stop;
-    float elapsedTime;
-
-    cudaEventCreate( &start );
-    cudaEventCreate( &stop );
-    cudaEventRecord( start, 0 );
-
-    cpu_final_arr = (int*) malloc( sizeof(int) * suff_size);
-    cpu_suf_arr = (int*) malloc( sizeof(int) * suff_size);
-    CUDA_SAFE_CALL( cudaMalloc( (void **)&gpu_aux_arr, sizeof(int) * suff_size) );
-    CUDA_SAFE_CALL( cudaMalloc( (void **)&gpu_suf_arr, sizeof(int) * suff_size) );
-    CUDA_SAFE_CALL( cudaMalloc( (void **)&gpu_genome, sizeof(char) * suff_size) );
-
-    set_quickSort_kernel(suff_size);
-
-    init_arr(suff_size);
-    copy_to_memory(suff_size);
-
-    quick_sort_bucket(gpu_suf_arr, suff_size, 0, true);
-
-    CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_suf_arr, sizeof(int) * suff_size, cudaMemcpyDeviceToHost) );
-    cout << "Suffix Array for Genome: " << endl;
-    print_gene_array(cpu_final_arr, suff_size);
-
-
-    cudaEventRecord( stop, 0 );
-    cudaEventSynchronize( stop );
-    cudaEventElapsedTime( &elapsedTime, start, stop );
-
-    printf("%d %f\n", suff_size, elapsedTime * (0.001));
-    free_memory();
-
-    return 0;
 }
