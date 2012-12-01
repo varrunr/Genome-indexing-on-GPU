@@ -84,9 +84,9 @@ int main( int argc, char** argv)
     
     init_bsort( b_info, 
                 3  /* prefix_len */, 
-                256 /* n_threads */, 
+                32 /* n_threads */, 
                 suff_size, 
-                256 /* threads_per_block */);
+                16 /* threads_per_block */);
     
     /* Read genome from disk */
     setup(suff_size, argv[2] );
@@ -122,17 +122,29 @@ int main( int argc, char** argv)
     
     for(int i = 0; i < b_info->n_buckets; i++)
     {
-        loadBucket( b_info, gpu_genome, gpu_suf_arr, gpu_aux_arr, i);
+        n_buck = loadBucket( b_info, gpu_genome, gpu_suf_arr, gpu_aux_arr, i);
         
+#ifdef _DEBUG_
+        cout<<"=== Bucket "<<i<<": " << n_buck <<" elements ===="<<endl;
+        cudaMemcpy( cpu_suf_arr , gpu_aux_arr , 
+                    (n_buck * sizeof(int)), 
+                    cudaMemcpyDeviceToHost);
+
+        for(int j = 0; j < n_buck; j++)
+        {
+            cout<<(cpu_genome + cpu_suf_arr[j])<<endl;
+        }
+#endif        
         /*
             Do Quick sort here on gpu_aux_arr[0...n_buck]
          */
+        /*
         if(i == b_info->n_buckets-1){
             quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, true, b_info->max_bucket_sz);
         } else {
             quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, false, b_info->max_bucket_sz);
         }
-        
+        */
         if(n_buck > 0)
         {
             /*
@@ -146,15 +158,18 @@ int main( int argc, char** argv)
     }
     
 //    CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_suf_arr, sizeof(int) * suff_size, cudaMemcpyDeviceToHost) );
+    
+#ifdef _PRINT_
     cout << "Suffix Array for Genome: " << endl;
     print_gene_array(cpu_suf_arr, suff_size);
+#endif
 
     cudaEventRecord( stop, 0 );
     cudaEventSynchronize( stop );
     cudaEventElapsedTime( &elapsedTime, start, stop );
-
+#ifdef _PRINT_
     printf("%d %f\n", suff_size, elapsedTime * (0.001));
-    
+#endif    
     free_memory();
 
     return 0;

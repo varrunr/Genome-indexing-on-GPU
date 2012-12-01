@@ -7,7 +7,8 @@
 #define ALPHA_SIZE 4
 #define NALPHA 4
 #define uint32 unsigned int
-
+//#define _DEBUG_
+#define _PRINT_
     /* Constants */
     const char  alpha[4]    =   {'A','C','G','T'};
 

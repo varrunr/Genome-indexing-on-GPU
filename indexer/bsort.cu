@@ -54,13 +54,17 @@ __global__ void countBuckets( int suff_size , int b_size , int s_seg, int n_thre
     int i = 0;
     for( i = start; i < end ; i++ )
     {
-        b =  get_bucket_no( gpu_genome + gpu_suf_arr[i] , b_size);
-        gpu_bucket_ct[ b * n_threads + tid ] += 1;
+        if(i < suff_size)
+        {
+            b =  get_bucket_no( gpu_genome + gpu_suf_arr[i] , b_size);
+            gpu_bucket_ct[ b * n_threads + tid ] += 1;
+        }
     }
     __syncthreads();
 
 }
-__global__ void BsortWriteBackOne(  int suff_size , int b_size , int s_seg, int n_threads, int base,
+__global__ void BsortWriteBackOne(  int suff_size , int b_size , int s_seg, 
+                                    int n_threads, int base, int bucket,
                                     char* gpu_genome , int *gpu_suf_arr , 
                                     int *gpu_aux_arr , int *gpu_bucket_ct)
 {
@@ -72,12 +76,19 @@ __global__ void BsortWriteBackOne(  int suff_size , int b_size , int s_seg, int 
     int loc,offset;
     for( i = start; i < end ; i++ )
     {
-        b =  get_bucket_no( gpu_genome + gpu_suf_arr[i] , b_size);
-        offset = b * n_threads + tid;
-        loc = gpu_bucket_ct[offset] - base;
-        gpu_aux_arr[loc-1] = gpu_suf_arr[i];
-        gpu_bucket_ct[offset] = loc - 1;
+        if(i < suff_size)
+        {
+            b =  get_bucket_no( gpu_genome + gpu_suf_arr[i] , b_size);
+            if(b == bucket)
+            {
+                offset = b * n_threads + tid;
+                loc = gpu_bucket_ct[offset] - base;
+                gpu_aux_arr[loc-1] = gpu_suf_arr[i];
+                gpu_bucket_ct[offset] -= 1;
+            }
+        }
     }
+
     __syncthreads();  
 }
 
@@ -93,11 +104,16 @@ __global__ void BsortWriteBackAll( int suff_size , int b_size , int s_seg,
     int loc,offset;
     for( i = start; i < end ; i++ )
     {
-        b =  get_bucket_no( gpu_genome + gpu_suf_arr[i] , b_size);
-        offset = b * NTHREADS + tid;
-        loc = gpu_bucket_ct[offset];
-        gpu_aux_arr[loc-1] = gpu_suf_arr[i];
-        gpu_bucket_ct[offset] = loc - 1;
+        if(i < suff_size)
+        {
+            b =  get_bucket_no( gpu_genome + gpu_suf_arr[i] , b_size);
+        
+            offset = b * NTHREADS + tid;
+        
+            loc = gpu_bucket_ct[offset];
+            gpu_aux_arr[loc-1] = gpu_suf_arr[i];
+            gpu_bucket_ct[offset] = loc - 1;
+        }
     }
     __syncthreads();  
 }
@@ -197,7 +213,7 @@ void doPrefixSum(struct bsort_info *info)
 int* findMaxBucketCount( struct bsort_info *info, char *gpu_genome, int *gpu_suf_arr, int *gpu_aux_arr)
 {
     /* Block and grid dimensions */
-    int blkGridWidth = info->n_threads/info->threads_per_blk;
+    int blkGridWidth = info->n_threads/info->threads_per_blk + 1;
     int blkGridHeight = 1;
     
     dim3 blkGridRows(blkGridWidth, blkGridHeight);
@@ -216,26 +232,39 @@ int* findMaxBucketCount( struct bsort_info *info, char *gpu_genome, int *gpu_suf
     
     copy2gpu(cpu_bucket_ct, gpu_bucket_ct, info->n_threads * info->n_buckets );
     
-    countBuckets<<< blkGridRows, thdBlkRows >>> (info->suff_size , info->prefix_len , info->s_seg , info->n_threads,
+    countBuckets<<< blkGridRows, thdBlkRows >>> (info->suff_size , info->prefix_len , 
+                                                info->s_seg , info->n_threads,
                                                 gpu_genome , gpu_suf_arr, 
                                                 gpu_aux_arr , gpu_bucket_ct);
 
-    /* Parallel prefix block and grid dimensions */                
     
-    doPrefixSum(info);
-                    
+    /* Parallel prefix block and grid dimensions */                
+     
+
+#ifdef _DEBUG_                    
     cudaMemcpy( cpu_bucket_ct , gpu_bucket_ct , 
                 (info->n_buckets * info->n_threads * sizeof(int)), 
                 cudaMemcpyDeviceToHost);
     
+    print2d(cpu_bucket_ct, info->n_buckets, info->n_threads);
+#endif    
+    doPrefixSum(info);
+    
+    cudaMemcpy( cpu_bucket_ct , gpu_bucket_ct , 
+                (info->n_buckets * info->n_threads * sizeof(int)), 
+                cudaMemcpyDeviceToHost);
+#ifdef _DEBUG_
+    print2d(cpu_bucket_ct, info->n_buckets, info->n_threads);
+#endif    
     info->max_bucket_sz = getMaxCount(cpu_bucket_ct, info->n_buckets, info->n_threads);
     
     return gpu_bucket_ct;
 }
 
-int loadBucket(struct bsort_info *info, char *gpu_genome, int *gpu_suf_arr, int *gpu_aux_arr, int bucket_no)
+int loadBucket( struct bsort_info *info, char *gpu_genome, int *gpu_suf_arr, 
+                int *gpu_aux_arr, int bucket_no)
 {
-    int blkGridWidth = info->n_threads/info->threads_per_blk;
+    int blkGridWidth = info->n_threads/info->threads_per_blk + 1;
     int blkGridHeight = 1;
     
     dim3 blkGridRows(blkGridWidth, blkGridHeight);
@@ -243,7 +272,11 @@ int loadBucket(struct bsort_info *info, char *gpu_genome, int *gpu_suf_arr, int 
     
     int base = cpu_bucket_ct[ info->n_threads * bucket_no];
     
-    BsortWriteBackOne<<< blkGridRows, thdBlkRows >>> (  info->suff_size , info->prefix_len , info->s_seg, info->n_threads, base,
+    BsortWriteBackOne<<< blkGridRows, thdBlkRows >>> (  info->suff_size , 
+                                                        info->prefix_len , 
+                                                        info->s_seg, 
+                                                        info->n_threads, 
+                                                        base, bucket_no, 
                                                         gpu_genome , gpu_suf_arr , 
                                                         gpu_aux_arr , gpu_bucket_ct);
     return cpu_bucket_ct_final[bucket_no];
@@ -256,11 +289,13 @@ void init_bsort(struct bsort_info *info, int prefix_len, int n_threads, int suff
     info->n_threads = n_threads;
     info->suff_size = suff_size;
     info->n_buckets = (int) pow( (double) NALPHA , (double) info->prefix_len);
-    info->s_seg = suff_size / n_threads;
+    info->s_seg =  (int) ceil((double)suff_size / (double)n_threads);
     info->max_bucket_sz = 0;
     info->threads_per_blk = tpb;
-//    cout<<" n_buckets: "<< info->n_buckets << endl;
-//    cout<<" s_seg: " << info->s_seg << endl;
-//    cout<<" threads_per_blk: " << tpb << endl; 
+#ifdef _DEBUG_
+    cout<<" No of buckets: "<< info->n_buckets << endl;
+    cout<<" s_seg: " << info->s_seg << endl;
+    cout<<" threads_per_blk: " << tpb << endl; 
+#endif
 }
 
