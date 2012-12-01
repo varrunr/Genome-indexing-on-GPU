@@ -92,7 +92,7 @@ int main( int argc, char** argv)
     setup(suff_size, argv[2] );
 
     cudaEvent_t start, stop;
-    //float elapsedTime;
+    float elapsedTime;
 
     cudaEventCreate( &start );
     cudaEventCreate( &stop );
