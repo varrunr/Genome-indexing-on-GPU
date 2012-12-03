@@ -9,6 +9,8 @@
 #include "pprefix.h"
 #include "bsort.h"
 
+#define BSORT_PAD 20
+
 #define CUDA_SAFE_CALL(x) x
 
 using namespace std;
@@ -28,9 +30,15 @@ void print_gene_array(int *array, int n)
 
 int setup( int num , char* filename ) 
 {
-    cpu_genome = (char *) malloc(sizeof(char)*(num+1));
+    cpu_genome = (char *) malloc(sizeof(char)*(num + BSORT_PAD + 1));
     read_genome2(filename, cpu_genome, num);
-    return (strlen(cpu_genome));        
+    int i;
+    for(i = num; i < num + BSORT_PAD; i++)
+    {
+        cpu_genome[i] = 'a';
+    }
+    cpu_genome[i] = '\0';
+    return (num);        
 }
 
 void read_genome2(char *filename, char *buffer, int num)
@@ -38,7 +46,6 @@ void read_genome2(char *filename, char *buffer, int num)
     FILE *fh;
     fh = fopen(filename, "r");
     fread(buffer, 1, num, fh);
-    buffer[num] = '\0';
     fclose(fh);
 }
 
@@ -71,7 +78,7 @@ void copy_to_memory( int suff_size)
     cudaMemcpy( gpu_suf_arr, cpu_suf_arr, sizeof(int) * suff_size, 
                 cudaMemcpyHostToDevice);
     
-    cudaMemcpy( gpu_genome, cpu_genome, sizeof(char) * suff_size, 
+    cudaMemcpy( gpu_genome, cpu_genome, sizeof(char) * (suff_size + BSORT_PAD + 1), 
                 cudaMemcpyHostToDevice);
 }
 
@@ -89,7 +96,7 @@ int main( int argc, char** argv)
                 16 /* threads_per_block */);
     
     /* Read genome from disk */
-    setup(suff_size, argv[2] );
+    setup(suff_size, argv[2]);
 
     cudaEvent_t start, stop;
     float elapsedTime;
@@ -102,8 +109,8 @@ int main( int argc, char** argv)
     cpu_final_arr = (int*) malloc( sizeof(int) * suff_size);
     cpu_suf_arr = (int*) malloc( sizeof(int) * suff_size);
     
-    CUDA_SAFE_CALL( cudaMalloc( (void **) &gpu_suf_arr, sizeof(int) * suff_size) );
-    CUDA_SAFE_CALL( cudaMalloc( (void **) &gpu_genome, sizeof(char) * suff_size) );
+    CUDA_SAFE_CALL( cudaMalloc( (void **) &gpu_suf_arr, sizeof(int) * suff_size ) );
+    CUDA_SAFE_CALL( cudaMalloc( (void **) &gpu_genome, sizeof(char) * (suff_size + 1 + BSORT_PAD) ) );
 
     init_arr(suff_size);
     copy_to_memory(suff_size);
