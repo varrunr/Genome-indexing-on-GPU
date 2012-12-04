@@ -23,8 +23,9 @@ void print(int *array, int n)
 
 void print_gene_array(int *array, int n)
 {
-    for(int i=0;i<n;i++){
-        printf("%d - %s\n", array[i], cpu_genome+array[i]);
+    for(int i = 0;i < n;i++){
+        //printf("%d - %s\n", array[i], cpu_genome+array[i]);
+        printf("%d\n", array[i]);
     }
 }
 
@@ -33,11 +34,12 @@ int setup( int num , char* filename )
     cpu_genome = (char *) malloc(sizeof(char)*(num + BSORT_PAD + 1));
     read_genome2(filename, cpu_genome, num);
     int i;
-    for(i = num; i < num + BSORT_PAD; i++)
+    
+    for(i = num; i < num + BSORT_PAD + 1; i++)
     {
-        cpu_genome[i] = 'a';
+        cpu_genome[i] = 0;
     }
-    cpu_genome[i] = '\0';
+    
     return (num);        
 }
 
@@ -120,7 +122,7 @@ int main( int argc, char** argv)
 
     /* Find the max no of buckets */
     findMaxBucketCount(b_info, gpu_genome, gpu_suf_arr, gpu_aux_arr);
-    
+    //cout<<"max_bucket_sz: "<< b_info->max_bucket_sz<<endl;
     CUDA_SAFE_CALL( cudaMalloc( (void **) &gpu_aux_arr, sizeof(int) * b_info->max_bucket_sz) );
     
     /* Sort one bucket at a time using quick sort */
@@ -129,37 +131,38 @@ int main( int argc, char** argv)
     
     for(int i = 0; i < b_info->n_buckets; i++)
     {
+
         n_buck = loadBucket( b_info, gpu_genome, gpu_suf_arr, gpu_aux_arr, i);
         
-#ifdef _DEBUG_
-        cout<<"=== Bucket "<<i<<": " << n_buck <<" elements ===="<<endl;
-        cudaMemcpy( cpu_suf_arr , gpu_aux_arr , 
-                    (n_buck * sizeof(int)), 
-                    cudaMemcpyDeviceToHost);
-
-        for(int j = 0; j < n_buck; j++)
-        {
-            cout<<(cpu_genome + cpu_suf_arr[j])<<endl;
-        }
-#endif        
+        //cout<<"=== Bucket "<< i << ": " << n_buck <<" elements ===="<<endl;
+        
         /*
             Do Quick sort here on gpu_aux_arr[0...n_buck]
          */
-        /*
-        if(i == b_info->n_buckets-1){
-            quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, true, b_info->max_bucket_sz);
-        } else {
-            quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, false, b_info->max_bucket_sz);
-        }
-        */
+
         if(n_buck > 0)
         {
+            if(i == b_info->n_buckets - 1)
+            {
+                quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, true, b_info->max_bucket_sz);
+            } 
+            else 
+            {
+                quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, false, b_info->max_bucket_sz);
+            }
+            
             /*
                 Copy back to suffix array 
              */
+            
             cudaMemcpy( cpu_suf_arr + cur_suff , gpu_aux_arr , 
                         (n_buck * sizeof(int)), 
                         cudaMemcpyDeviceToHost);
+            
+            /*for(int j = cur_suff; j < cur_suff + n_buck; j++)
+            {
+                cout<<cpu_suf_arr[j]<<" : " << (cpu_genome + cpu_suf_arr[j])<<endl;
+            }*/
             cur_suff += n_buck;
         }
     }
@@ -167,7 +170,7 @@ int main( int argc, char** argv)
 //    CUDA_SAFE_CALL( cudaMemcpy(cpu_final_arr, gpu_suf_arr, sizeof(int) * suff_size, cudaMemcpyDeviceToHost) );
     
 #ifdef _PRINT_
-    cout << "Suffix Array for Genome: " << endl;
+    //cout << "Suffix Array for Genome: " << endl;
     print_gene_array(cpu_suf_arr, suff_size);
 #endif
 

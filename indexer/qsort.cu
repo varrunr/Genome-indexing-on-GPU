@@ -80,7 +80,7 @@ __global__ void quickSortGPU(   int *sh_gpu_suf_arr, int *sh_gpu_suf_arr_copy, i
 
             if(tid != pivotIndex)
             {
-                if(strcmp_cuda(sh_gpu_genome + sh_gpu_suf_arr[tid] ,sh_gpu_genome + sh_gpu_suf_arr[pivotIndex] ) < 0)
+                if(strcmp_cuda(sh_gpu_genome + sh_gpu_suf_arr[tid] ,sh_gpu_genome + sh_gpu_suf_arr[pivotIndex]) < 0)
                 {
                     lt_pivot[threadIdx.x] = 1;
                 }
@@ -336,7 +336,6 @@ void free_gpu_memory(){
     cudaFree(start_ind_arr_copy);
     cudaFree(end_ind_arr_copy);
 }
-
 
 void quick_sort_bucket(int *device_arr, char *gpu_genome, int bucket_size, int bucket_number, bool last_bucket, int max_bucket_size){
 
