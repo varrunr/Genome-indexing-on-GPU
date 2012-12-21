@@ -152,10 +152,17 @@ void print2d(int *arr , int rows , int cols)
     {
         for( int j = 0 ; j < cols ; j++ )
         {
-            printf("%5d ", arr[i*cols + j]);
+            printf("%d ", arr[i*cols + j]);
         }
         printf("\n");
     }
+}
+
+void print1d(int *arr, int row, int cols){
+    for(int j=0; j<cols; j++){
+        printf("%d ", arr[row*cols + j]);
+    }
+    printf("\n");
 }
 
 int getMaxCount(int *arr , int rows , int cols)
@@ -172,43 +179,9 @@ int getMaxCount(int *arr , int rows , int cols)
 
 void doPrefixSum(struct bsort_info *info)
 {
-
-    cudaDeviceProp prop;
-    int count; 
-    int maxBlockGridWidth;
-    //int maxBlockGridHeight, maxBlockGridDepth;
-    
-    cudaGetDeviceCount(&count);
-    cudaGetDeviceProperties(&prop, 0);
-    
-    maxBlockGridWidth = prop.maxGridSize[0];
-    //maxBlockGridHeight = prop.maxGridSize[1];
-    //maxBlockGridDepth = prop.maxGridSize[2];
-    
-    int block_size = 512;
-    int blockGridWidth = (info->n_threads*info->n_buckets)/block_size + 1;
-    
-    int blockGridHeight = 1;
-    dim3 threadBlockRows, blockGridRows;
-        
-    blockGridRows.x = blockGridWidth; 
-    blockGridRows.y = blockGridHeight;
-        
-    threadBlockRows.x = PPREFIX_BLK_SZ;//block_size;
-    threadBlockRows.y = 1;
-        
-    if(blockGridWidth > maxBlockGridWidth)
-    {
-        blockGridWidth = maxBlockGridWidth;     
-        blockGridHeight = ((info->n_threads*info->n_buckets)/(maxBlockGridWidth * block_size)) + 1;
-    }
-        
     for(int i = 0; i < info->n_buckets; i++)
     {
-
-        prefixCompute(  gpu_bucket_ct, blockGridRows, threadBlockRows, 
-                        block_size , i*info->n_threads , 
-                        ( (i+1)*(info->n_threads) - 1 ) , 
+        prefixCompute(  gpu_bucket_ct + i*info->n_threads ,
                         info->n_threads);
     }
 }

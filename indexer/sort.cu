@@ -24,8 +24,16 @@ void print(int *array, int n)
 void print_gene_array(int *array, int n)
 {
     for(int i = 0;i < n;i++){
-        //printf("%d - %s\n", array[i], cpu_genome+array[i]);
-        printf("%d\n", array[i]);
+        printf("%d - %s\n", array[i], cpu_genome+array[i]);
+        //printf("%d\n", array[i]);
+    }
+}
+
+void print_part_gene_array(int *array, int n)
+{
+    for(int i = 0;i < n;i++){
+        printf("%d - %.10s\n", array[i], cpu_genome+array[i]);
+        //printf("%d\n", array[i]);
     }
 }
 
@@ -93,9 +101,9 @@ int main( int argc, char** argv)
     
     init_bsort( b_info, 
                 3  /* prefix_len */, 
-                32 /* n_threads */, 
+                1024 /* n_threads */, 
                 suff_size, 
-                16 /* threads_per_block */);
+                512 /* threads_per_block */);
     
     /* Read genome from disk */
     setup(suff_size, argv[2]);
@@ -134,7 +142,7 @@ int main( int argc, char** argv)
 
         n_buck = loadBucket( b_info, gpu_genome, gpu_suf_arr, gpu_aux_arr, i);
         
-        //cout<<"=== Bucket "<< i << ": " << n_buck <<" elements ===="<<endl;
+        cout<<"=== Bucket "<< i << ": " << n_buck <<" elements : "<< cur_suff <<" Position ===="<<endl;
         
         /*
             Do Quick sort here on gpu_aux_arr[0...n_buck]
@@ -142,6 +150,15 @@ int main( int argc, char** argv)
 
         if(n_buck > 0)
         {
+            cudaMemcpy( cpu_suf_arr + cur_suff , gpu_aux_arr , 
+                        (n_buck * sizeof(int)), 
+                        cudaMemcpyDeviceToHost);
+            
+            if(i == 54){
+                cout << "TCG Bucket Before Qsort: " << endl;
+                print_part_gene_array( cpu_suf_arr+cur_suff, n_buck);
+            }
+
             if(i == b_info->n_buckets - 1)
             {
                 quick_sort_bucket(gpu_aux_arr, gpu_genome,  n_buck, i, true, b_info->max_bucket_sz);
@@ -159,6 +176,10 @@ int main( int argc, char** argv)
                         (n_buck * sizeof(int)), 
                         cudaMemcpyDeviceToHost);
             
+            if(i == 54){
+                cout << "\n\nTCG Bucket After Qsort: " << endl;
+                print_part_gene_array( cpu_suf_arr+cur_suff, n_buck);
+            }
             /*for(int j = cur_suff; j < cur_suff + n_buck; j++)
             {
                 cout<<cpu_suf_arr[j]<<" : " << (cpu_genome + cpu_suf_arr[j])<<endl;
@@ -171,7 +192,7 @@ int main( int argc, char** argv)
     
 #ifdef _PRINT_
     //cout << "Suffix Array for Genome: " << endl;
-    print_gene_array(cpu_suf_arr, suff_size);
+    //print_gene_array(cpu_suf_arr, suff_size);
 #endif
 
     cudaEventRecord( stop, 0 );

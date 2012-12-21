@@ -10,6 +10,32 @@
 #define CUDA_SAFE_CALL(x) x
 using namespace std;
 
+void block_calculation(dim3* blockGridRows, dim3* threadBlockRows, int* block_size, int prefixesCount){
+	///////////////////////////////////////////////////////////////////
+	// Get Device Properties
+	cudaDeviceProp prop;
+	int count, max_threads_per_block;
+	int maxBlockGridWidth;
+	cudaGetDeviceCount(&count);
+	cudaGetDeviceProperties(&prop, 0);
+	max_threads_per_block = prop.maxThreadsPerBlock;
+	maxBlockGridWidth = prop.maxGridSize[0];
+	///////////////////////////////////////////////////////////////////
+
+	*block_size = max_threads_per_block;
+	int blockGridWidth = prefixesCount/(*block_size) + 1;
+	int blockGridHeight = 1;
+	if(blockGridWidth > maxBlockGridWidth)
+	{
+		blockGridWidth = maxBlockGridWidth;		
+		blockGridHeight = (prefixesCount/(maxBlockGridWidth * (*block_size))) + 1;
+	}
+
+	(*blockGridRows).x = blockGridWidth;
+	(*blockGridRows).y = blockGridHeight;
+	(*threadBlockRows).x = (*block_size);
+	(*threadBlockRows).y = 1;
+}
 __global__ void block_scan_write_up( int *g_idata, int block_offset, int block_size, int start, int end, int n)
 {
     int tid = (int) (threadIdx.x + blockDim.x * threadIdx.y + \
@@ -78,11 +104,14 @@ __global__ void block_scan( int *g_idata, int block_offset, int block_size, int 
 		g_idata[((tid+1)*block_offset) - 1] = temp[pout*n1+thid];
 }
 
-void prefixCompute( int *gpu_prefix_arr, dim3 blockGridRows, dim3 threadBlockRows, 
-                    int block_size, int start, int end, int prefixesCount)
+void prefixCompute( int *gpu_prefix_arr, int prefixesCount)
 {
+	dim3 blockGridRows, threadBlockRows;
+	int block_size;
+	block_calculation(&blockGridRows, &threadBlockRows, &block_size, prefixesCount);
+
 	int sharedMemory = 2*block_size*sizeof(int);
-	
+
 	int block_offset = 0;
 	int l = log2((float)prefixesCount)/log2((float)block_size);
 
@@ -92,7 +121,7 @@ void prefixCompute( int *gpu_prefix_arr, dim3 blockGridRows, dim3 threadBlockRow
 		block_scan <<<  blockGridRows, 
                         threadBlockRows, 
                         sharedMemory >>> (  gpu_prefix_arr, block_offset, 
-                                            block_size, start, end, 
+                                            block_size, 0, prefixesCount - 1, 
                                             prefixesCount);
 		cudaThreadSynchronize();
 	}
@@ -102,7 +131,7 @@ void prefixCompute( int *gpu_prefix_arr, dim3 blockGridRows, dim3 threadBlockRow
 		block_scan_write_up <<< blockGridRows, 
                                 threadBlockRows, 
                                 sharedMemory>>>(gpu_prefix_arr, block_offset, block_size, 
-                                                start, end, prefixesCount);
+                                                0, prefixesCount - 1, prefixesCount);
 		cudaThreadSynchronize();
 	}
 

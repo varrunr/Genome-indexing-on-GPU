@@ -245,7 +245,7 @@ void quick_sort_genome(int *device_arr, long unsigned int suff_size, char *gpu_g
         //CUT_CHECK_ERROR("Quick sort Kernel execution failed\n");
         CUDA_SAFE_CALL( cudaThreadSynchronize() );
         
-        prefixCompute(sh_gpu_aux_arr, blockGridRows, threadBlockRows, block_size, 0, suff_size-1, suff_size);
+        prefixCompute(sh_gpu_aux_arr, suff_size);
     
         adjust_prefix_sum <<<   blockGridRows, 
                                 threadBlockRows >>> (   sh_gpu_aux_arr, 
