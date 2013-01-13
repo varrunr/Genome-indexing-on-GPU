@@ -340,12 +340,17 @@ void free_gpu_memory(){
 void quick_sort_bucket(int *device_arr, char *gpu_genome, int bucket_size, int bucket_number, bool last_bucket, int max_bucket_size){
 
     if(bucket_number == 0){
+        set_quickSort_kernel(max_bucket_size);
+        cout << "First Bucket in Qsort -- Allocating Memory." << endl;
+        cout << "Block Grid Values: " << blockGridRows.x << "," << blockGridRows.y << endl;
+        cout << "Thread Block Values: " << threadBlockRows.x << "," << threadBlockRows.y << endl;
         alloc_device_pointers(max_bucket_size);
     }
 
     quick_sort_genome(device_arr, bucket_size, gpu_genome);
 
     if(last_bucket){
+        cout << "Last Bucket in Qsort -- Deallocating Memory." << endl;
         free_gpu_memory();
     }
 

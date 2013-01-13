@@ -31,7 +31,7 @@ void print_gene_array(int *array, int n)
 
 void print_part_gene_array(int *array, int n)
 {
-    for(int i = 0;i < n;i++){
+    for(int i = 0;i < 100;i++){
         printf("%d - %.10s\n", array[i], cpu_genome+array[i]);
         //printf("%d\n", array[i]);
     }
@@ -107,7 +107,7 @@ int main( int argc, char** argv)
     
     /* Read genome from disk */
     setup(suff_size, argv[2]);
-
+ 
     cudaEvent_t start, stop;
     float elapsedTime;
 
@@ -126,7 +126,7 @@ int main( int argc, char** argv)
     copy_to_memory(suff_size);
     
     /* Initialize the quick sort kernel */
-    set_quickSort_kernel(suff_size);
+//    set_quickSort_kernel(suff_size);
 
     /* Find the max no of buckets */
     findMaxBucketCount(b_info, gpu_genome, gpu_suf_arr, gpu_aux_arr);
@@ -155,7 +155,8 @@ int main( int argc, char** argv)
                         cudaMemcpyDeviceToHost);
             
             if(i == 54){
-                cout << "TCG Bucket Before Qsort: " << endl;
+//                cout<<"=== Bucket "<< i << ": " << n_buck <<" elements : "<< cur_suff <<" Position ===="<<endl;
+                cout << "TCG Bucket Before Qsort and max size:" << b_info->max_bucket_sz << endl;
                 print_part_gene_array( cpu_suf_arr+cur_suff, n_buck);
             }
 
